@@ -5,10 +5,12 @@ app = Ursina()
 
 ELF_COLOR = color.white
 ELFC = color
-ELF_SIMPLE_TRIANGLE = [(0, 0, 0), (1, 1, 1), (0, 0, 0)]
+ELF_SIMPLE_TRIANGLE = ['triangle.obj', (0, 0, 0), (0.5, 0.5, 0.5), (0, 0, 0)]
 ELF_MAP = {}
 ELF_LAST_ID = -1
 update = None
+
+ELF_TEST_TRIANGLE_ID = -1
 
 
 class ELFContext:
@@ -42,12 +44,13 @@ def elf_end_color():
     ELF_COLOR = color.white
 
 
-def elf_draw_triangle(obj):
-    pos = obj[0]
-    sc = obj[1]
-    rot = obj[2]
+def elf_draw(obj):
+    shape = obj[0]
+    pos = obj[1]
+    sc = obj[2]
+    rot = obj[3]
     en_id = elf_gen_id()
-    ELF_MAP[en_id] = Entity(model='cube', position=pos, scale=sc, rotation=rot, color=ELF_COLOR)
+    ELF_MAP[en_id] = Entity(model=shape, position=pos, scale=sc, rotation=rot, color=ELF_COLOR)
     return en_id
 
 
@@ -65,6 +68,8 @@ def elf_gen_id():
     ELF_LAST_ID = randint(0, 1000000000000000000)
     return ELF_LAST_ID
 
+
+# Translation + Rotation
 
 def elf_translate_space_by_id(id, x, y, z):
     ELF_MAP[id].x += x
@@ -87,21 +92,30 @@ def elf_rotate_space(x, y, z):
 
 
 def elf_update():
-    elf_translate_space(0, 0, -0.01)
-    elf_rotate_space(0, 1, 0)
+    elf_translate_space_by_id(ELF_TEST_TRIANGLE_ID, 0, 0, -0.01)
+    elf_rotate_space_by_id(ELF_TEST_TRIANGLE_ID, 0, 1, 0)
 
 
 def elf_set_render(uf):
     global update
     update = uf
 
+def elf_shade_dir_light(object, enable_shadows=True):
+    rot = (object[0], object[1], object[2])
+    dir_light = DirectionalLight(rotation=rot, shadows=enable_shadows)
+    obj_id = elf_gen_id()
+    ELF_MAP[obj_id] = dir_light
+    return obj_id
+
 
 def main():
+    global ELF_TEST_TRIANGLE_ID
     context = elf_create_context()
     elf_clear_back()
     elf_prepare_context(context)
     elf_begin_color(ELFC.yellow)
-    elf_draw_triangle(ELF_SIMPLE_TRIANGLE)
+    ELF_TEST_TRIANGLE_ID = elf_draw(ELF_SIMPLE_TRIANGLE)
+    elf_shade_dir_light([0, 0, 0])
     elf_set_render(elf_update)
     elf_render_window()
 
