@@ -1,7 +1,12 @@
+from random import randint, random
+
+from panda3d.core import AntialiasAttrib, loadPrcFileData
+from rpcore import RenderPipeline
 from ursina import *
-from random import randint
+from ursina.shaders import *
 
 app = Ursina()
+pipeline = RenderPipeline()
 
 ELF_COLOR = color.white
 ELFC = color
@@ -10,7 +15,7 @@ ELF_MAP = {}
 ELF_LAST_ID = -1
 update = None
 
-ELF_TEST_TRIANGLE_ID = -1
+ELF_TEST_PARENT_ID = -1
 
 
 class ELFContext:
@@ -32,6 +37,7 @@ def elf_prepare_context(context):
     window.setSize(context.w, context.h)
     window.fps_counter.enabled = context.f
     window.exit_button.enabled = False
+    loadPrcFileData('', 'win-size ' + str(context.w) + ' ' + str(context.h))
 
 
 def elf_begin_color(color_constant):
@@ -44,13 +50,33 @@ def elf_end_color():
     ELF_COLOR = color.white
 
 
-def elf_draw(obj):
+def elf_draw(obj, receive_shadows=True):
     shape = obj[0]
     pos = obj[1]
     sc = obj[2]
     rot = obj[3]
     en_id = elf_gen_id()
     ELF_MAP[en_id] = Entity(model=shape, position=pos, scale=sc, rotation=rot, color=ELF_COLOR)
+    if receive_shadows:
+        ELF_MAP[en_id].shader = basic_lighting_shader
+    return en_id
+
+
+def elf_draw_parent(parent, obj, receive_shadows=True):
+    shape = obj[0]
+    pos = obj[1]
+    sc = obj[2]
+    rot = obj[3]
+    en_id = elf_gen_id()
+    entity = Entity(model=shape, position=pos, scale=sc, rotation=rot, color=ELF_COLOR, parent=ELF_MAP[parent])
+    if receive_shadows:
+        entity.shader = basic_lighting_shader
+    return en_id
+
+
+def elf_draw_empty():
+    en_id = elf_gen_id()
+    ELF_MAP[en_id] = Entity()
     return en_id
 
 
@@ -65,7 +91,7 @@ def elf_clear_back():
 
 def elf_gen_id():
     global ELF_LAST_ID
-    ELF_LAST_ID = randint(0, 1000000000000000000)
+    ELF_LAST_ID = randint(0, 100000000000000000000)
     return ELF_LAST_ID
 
 
@@ -91,33 +117,159 @@ def elf_rotate_space(x, y, z):
     elf_rotate_space_by_id(ELF_LAST_ID, x, y, z)
 
 
-def elf_update():
-    elf_translate_space_by_id(ELF_TEST_TRIANGLE_ID, 0, 0, -0.01)
-    elf_rotate_space_by_id(ELF_TEST_TRIANGLE_ID, 0, 1, 0)
-
-
 def elf_set_render(uf):
     global update
     update = uf
+
 
 def elf_shade_dir_light(object, enable_shadows=True):
     rot = (object[0], object[1], object[2])
     dir_light = DirectionalLight(rotation=rot, shadows=enable_shadows)
     obj_id = elf_gen_id()
+    dir_light.shadow_map_resolution = 512
+    dir_light.setShaderAuto()
     ELF_MAP[obj_id] = dir_light
+    app.render.setLight(dir_light)
     return obj_id
 
 
+def elf_gen_dir_light(object, enable_shadows=True):
+    en_id = elf_gen_id()
+    rot = (object[0], object[1], object[2])
+    dir_light = DirectionalLight(rotation=rot, shadows=enable_shadows)
+    dir_light.shadow_map_resolution = 512
+    dir_light.setShaderAuto()
+    ELF_MAP[en_id] = dir_light
+    return dir_light
+
+
+def elf_attach_light_to_id(id, light):
+    light.position = ELF_MAP[id].position
+    light.y += 0.1
+    return id
+
+
+def elf_shade_point_light(object, enable_shadows=True, at=(0, 0, 1)):
+    pos = (object[0], object[1], object[2])
+    en_id = elf_gen_id()
+    point_light = PointLight(shadows=True)
+    point_light.pos = pos
+    point_light.casts_shadows = enable_shadows
+    point_light.attenuation = at
+    point_light.shadow_map_resolution = 512
+    ELF_MAP[en_id] = point_light
+    return en_id
+
+
+def elf_gen_point_light(object, enable_shadows=True, at=(0, 0, 1)):
+    en_id = elf_gen_id()
+    pos = (object[0], object[1], object[2])
+    point_light = PointLight()
+    point_light.pos = pos
+    point_light.casts_shadows = enable_shadows
+    point_light.attenuation = at
+    point_light.vertex
+    ELF_MAP[en_id] = point_light
+    return point_light
+
+
+def elf_antialiasing_enable():
+    for key in ELF_MAP:
+        try:
+            ELF_MAP[key].setAntialias(AntialiasAttrib.MAuto)
+        except Exception:
+            pass
+    print("ELF: Antialiasing success")
+
+
+def elf_space_reset():
+    for key in ELF_MAP:
+        ELF_MAP[key].enabled = False
+    ELF_MAP.clear()
+    elf_clear_back()
+
+
+def elf_random_color():
+    return color.random_color()
+
+
+def gen_triangles():
+    for i in range(150):
+        elf_begin_color(elf_random_color())
+        scale = (0.5, 0.5, 0.5)
+        rotation = (randint(0, 360), randint(0, 360), randint(0, 360),)
+        position = (random.uniform(-7, 10), random.uniform(-5, 6), random.uniform(-20, 20))
+        elf_draw_parent(ELF_TEST_PARENT_ID, ["triangle", position, scale, rotation])
+        elf_end_color()
+
+
+def elf_input(key):
+    return held_keys[key]
+
+
+def elf_begin_wireframe():
+    for key in ELF_MAP:
+        ELF_MAP[key].setRenderModeWireframe(True)
+
+
+def elf_end_wireframe():
+    for key in ELF_MAP:
+        ELF_MAP[key].setRenderModeWireframe(False)
+
+
+def elf_shift_space(x, y, z):
+    for key in ELF_MAP:
+        ELF_MAP[key].x += x
+        ELF_MAP[key].y += y
+        ELF_MAP[key].z += z
+
+
+def elf_load_identity():
+    for key in ELF_MAP:
+        ELF_MAP[key].x += 0
+        ELF_MAP[key].y += 0
+        ELF_MAP[key].z += 0
+
+
+def elf_matrix_rotate_space(x, y, z):
+    for key in ELF_MAP:
+        ELF_MAP[key].rotation_x += x
+        ELF_MAP[key].rotation_y += y
+        ELF_MAP[key].rotation_z += z
+
+
+def elf_update():
+    if elf_input('r'):
+        elf_space_reset()
+        draw_triangles()
+        return
+    if elf_input('w'):
+        elf_shift_space(0, 0, -0.1)
+    elif elf_input('s'):
+        elf_shift_space(0, 0, 0.1)
+    elif elf_input('d'):
+        elf_shift_space(-0.1, 0, 0)
+    elif elf_input('a'):
+        elf_shift_space(0.1, 0, 0)
+
+def elf_shader_generation():
+    app.render.setShaderAuto()
+
 def main():
-    global ELF_TEST_TRIANGLE_ID
     context = elf_create_context()
     elf_clear_back()
     elf_prepare_context(context)
-    elf_begin_color(ELFC.yellow)
-    ELF_TEST_TRIANGLE_ID = elf_draw(ELF_SIMPLE_TRIANGLE)
-    elf_shade_dir_light([0, 0, 0])
+    draw_triangles()
     elf_set_render(elf_update)
+    elf_shader_generation()
     elf_render_window()
+
+
+def draw_triangles():
+    global ELF_TEST_PARENT_ID
+    ELF_TEST_PARENT_ID = elf_draw(["triangle", (0, 0, 0), (0.5, 0.5, 0.5), (0, 0, 0)])
+    elf_shade_dir_light([0, 0, 0])
+    gen_triangles()
 
 
 if __name__ == '__main__':
