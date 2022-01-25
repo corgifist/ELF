@@ -1,6 +1,6 @@
 from random import randint, random
 
-from panda3d.core import AntialiasAttrib, loadPrcFileData, Material
+from panda3d.core import AntialiasAttrib, loadPrcFileData, Material, Fog
 from direct.filter.CommonFilters import CommonFilters
 from ursina import *
 from ursina.shaders import *
@@ -18,7 +18,6 @@ ELF_MAP = {}
 ELF_PARENTS = {}
 ELF_MATERIALS = {}
 ELF_LAST_ID = -1
-ELF_FOG = None
 update = None
 ELF_SKY = None
 
@@ -97,8 +96,10 @@ def elf_draw_empty():
 def elf_render_window():
     app.run()
 
+
 def elf_filters_bloom():
     filters.setBloom()
+
 
 def elf_clear_back():
     en_id = elf_gen_id()
@@ -173,6 +174,32 @@ def elf_shade_point_light(object, enable_shadows=True, at=(0, 0, 1), resolution=
     point_light.light.setShadowCaster(enable_shadows, resolution, resolution)
     ELF_MAP[en_id] = point_light
     return en_id
+
+
+def elf_render_exp_fog(color=(0.5, 0.5, 0.5, 1), exp=1.0):
+    en_id = elf_gen_id()
+    fog = Fog('expfog')
+    fog.setColor(color)
+    fog.setExpDensity(exp)
+    app.render.setFog(fog)
+    ELF_MAP[en_id] = fog
+    return en_id
+
+
+def elf_render_linear_fog(color=(0.5, 0.5, 0.5, 1), linear_range_start=0, linear_range_end=160, fallback1=45,
+                          fallback2=160, fallback3=320):
+    en_id = elf_gen_id()
+    fog = Fog('expfog')
+    fog.setColor(color)
+    fog.setLinearRange(linear_range_start, linear_range_end)
+    fog.setLinearFallback(fallback1, fallback2, fallback3)
+    app.render.setFog(fog)
+    ELF_MAP[en_id] = fog
+    return en_id
+
+
+def elf_reset_fog():
+    app.render.clearFog()
 
 
 def elf_gen_point_light(object, enable_shadows=True, at=(0, 0, 1), resolution=1024):
@@ -310,6 +337,11 @@ def elf_material_set_specular_id(id, rgba):
     return id
 
 
+def elf_material_set_deffuse_id(id, rgba):
+    ELF_MATERIALS[id].setDiffuse(rgba)
+    return id
+
+
 def elf_material_set_emmision_id(id, rgba):
     ELF_MATERIALS[id].setEmission(rgba)
     return id
@@ -317,6 +349,11 @@ def elf_material_set_emmision_id(id, rgba):
 
 def elf_material_apply(obj, mat):
     ELF_MAP[obj].setMaterial(ELF_MATERIALS[mat])
+
+
+def elf_material_set_ambient_id(id, rgba):
+    ELF_MATERIALS[id].setAmbient(rgba)
+    return id
 
 
 # Materials
@@ -374,6 +411,7 @@ def main():
     elf_set_render(elf_update)
     elf_shader_generation()
     elf_antialiasing_enable()
+    elf_render_linear_fog()
     elf_render_window()
 
 
