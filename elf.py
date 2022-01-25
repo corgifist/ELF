@@ -12,8 +12,10 @@ ELF_COLOR = color.white
 ELFC = color
 ELF_SIMPLE_TRIANGLE = ['triangle.obj', (0, 0, 0), (0.5, 0.5, 0.5), (0, 0, 0)]
 ELF_MAP = {}
+ELF_PARENTS = {}
 ELF_LAST_ID = -1
 update = None
+ELF_SKY = None
 
 ELF_TEST_PARENT_ID = -1
 
@@ -58,7 +60,7 @@ def elf_draw(obj, receive_shadows=True):
     en_id = elf_gen_id()
     ELF_MAP[en_id] = Entity(model=shape, position=pos, scale=sc, rotation=rot, color=ELF_COLOR)
     if receive_shadows:
-        ELF_MAP[en_id].shader = basic_lighting_shader
+        entity.shader = basic_lighting_shader
     return en_id
 
 
@@ -71,6 +73,7 @@ def elf_draw_parent(parent, obj, receive_shadows=True):
     entity = Entity(model=shape, position=pos, scale=sc, rotation=rot, color=ELF_COLOR, parent=ELF_MAP[parent])
     if receive_shadows:
         entity.shader = basic_lighting_shader
+    ELF_PARENTS[parent] = ELF_PARENTS[parent] + [entity] if parent in ELF_PARENTS else [entity]
     return en_id
 
 
@@ -86,7 +89,8 @@ def elf_render_window():
 
 def elf_clear_back():
     en_id = elf_gen_id()
-    ELF_MAP[en_id] = Sky(color=color.black)
+    global ELF_SKY
+    ELF_SKY = Sky(color=color.black)
 
 
 def elf_gen_id():
@@ -195,7 +199,7 @@ def gen_triangles():
         scale = (0.5, 0.5, 0.5)
         rotation = (randint(0, 360), randint(0, 360), randint(0, 360),)
         position = (random.uniform(-7, 10), random.uniform(-5, 6), random.uniform(-20, 20))
-        elf_draw_parent(ELF_TEST_PARENT_ID, ["triangle", position, scale, rotation])
+        elf_draw_parent(ELF_TEST_PARENT_ID, ["triangle.obj", position, scale, rotation])
         elf_end_color()
     elf_attach_light_to_id(ELF_TEST_PARENT_ID, elf_gen_point_light([0, 0, 0]))
 
@@ -247,6 +251,14 @@ def elf_rotate_camera_matrix(x, y, z):
     camera.rotation_z += z
 
 
+def elf_change_model_by_id(id, model):
+    ELF_MAP[id].model = model
+
+
+def elf_change_model(model):
+    ELF_MAP[ELF_LAST_ID] = model
+
+
 def elf_update():
     if elf_input('r'):
         elf_space_reset()
@@ -272,6 +284,13 @@ def elf_update():
         elf_shift_camera_matrix(0, 0.1, 0)
     elif elf_input('space'):
         elf_shift_camera_matrix(0, -0.1, 0)
+    elif elf_input('q'):
+        for key in ELF_MAP:
+            elf_change_model_by_id(key, "cube")
+        for key in ELF_PARENTS:
+            for child in ELF_PARENTS[key]:
+                child.model = "cube"
+        elf_clear_back()
 
 
 def elf_shader_generation():
@@ -291,7 +310,9 @@ def main():
 
 def draw_triangles():
     global ELF_TEST_PARENT_ID
+    elf_begin_color(ELFC.white)
     ELF_TEST_PARENT_ID = elf_draw(["triangle", (0, 0, 0), (0.5, 0.5, 0.5), (0, 0, 0)])
+    elf_end_color()
     gen_triangles()
 
 
