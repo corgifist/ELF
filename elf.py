@@ -122,53 +122,49 @@ def elf_set_render(uf):
     update = uf
 
 
-def elf_shade_dir_light(object, enable_shadows=True):
+def elf_shade_dir_light(object, enable_shadows=True, resolution=1024):
     rot = (object[0], object[1], object[2])
-    dir_light = DirectionalLight(rotation=rot, shadows=enable_shadows)
+    dir_light = DirectionalLight(rotation=rot)
     obj_id = elf_gen_id()
-    dir_light.shadow_map_resolution = 512
+    dir_light.light.setShadowCaster(enable_shadows, resolution, resolution)
     dir_light.setShaderAuto()
     ELF_MAP[obj_id] = dir_light
-    app.render.setLight(dir_light)
     return obj_id
 
 
-def elf_gen_dir_light(object, enable_shadows=True):
+def elf_gen_dir_light(object, enable_shadows=True, resolution=1024):
     en_id = elf_gen_id()
     rot = (object[0], object[1], object[2])
     dir_light = DirectionalLight(rotation=rot, shadows=enable_shadows)
-    dir_light.shadow_map_resolution = 512
-    dir_light.setShaderAuto()
+    dir_light.light.setShadowCaster(enable_shadows, resolution, resolution)
     ELF_MAP[en_id] = dir_light
     return dir_light
 
 
 def elf_attach_light_to_id(id, light):
     light.position = ELF_MAP[id].position
-    light.y += 0.1
     return id
 
 
-def elf_shade_point_light(object, enable_shadows=True, at=(0, 0, 1)):
+def elf_shade_point_light(object, enable_shadows=True, at=(0, 0, 1), resolution=1024):
     pos = (object[0], object[1], object[2])
     en_id = elf_gen_id()
     point_light = PointLight(shadows=True)
     point_light.pos = pos
     point_light.casts_shadows = enable_shadows
     point_light.attenuation = at
-    point_light.shadow_map_resolution = 512
+    point_light.light.setShadowCaster(enable_shadows, resolution, resolution)
     ELF_MAP[en_id] = point_light
     return en_id
 
 
-def elf_gen_point_light(object, enable_shadows=True, at=(0, 0, 1)):
+def elf_gen_point_light(object, enable_shadows=True, at=(0, 0, 1), resolution=1024):
     en_id = elf_gen_id()
     pos = (object[0], object[1], object[2])
     point_light = PointLight()
     point_light.pos = pos
-    point_light.casts_shadows = enable_shadows
+    point_light._light.setShadowCaster(enable_shadows, resolution, resolution)
     point_light.attenuation = at
-    point_light.vertex
     ELF_MAP[en_id] = point_light
     return point_light
 
@@ -201,6 +197,7 @@ def gen_triangles():
         position = (random.uniform(-7, 10), random.uniform(-5, 6), random.uniform(-20, 20))
         elf_draw_parent(ELF_TEST_PARENT_ID, ["triangle", position, scale, rotation])
         elf_end_color()
+    elf_attach_light_to_id(ELF_TEST_PARENT_ID, elf_gen_point_light([0, 0, 0]))
 
 
 def elf_input(key):
@@ -238,22 +235,48 @@ def elf_matrix_rotate_space(x, y, z):
         ELF_MAP[key].rotation_z += z
 
 
+def elf_shift_camera_matrix(x, y, z):
+    camera.x += x
+    camera.y += y
+    camera.z += z
+
+
+def elf_rotate_camera_matrix(x, y, z):
+    camera.rotation_x += x
+    camera.rotation_y += y
+    camera.rotation_z += z
+
+
 def elf_update():
     if elf_input('r'):
         elf_space_reset()
         draw_triangles()
         return
     if elf_input('w'):
-        elf_shift_space(0, 0, -0.1)
+        elf_shift_camera_matrix(0, 0, 0.1)
     elif elf_input('s'):
-        elf_shift_space(0, 0, 0.1)
+        elf_shift_camera_matrix(0, 0, -0.1)
     elif elf_input('d'):
-        elf_shift_space(-0.1, 0, 0)
+        elf_shift_camera_matrix(0.1, 0, 0)
     elif elf_input('a'):
-        elf_shift_space(0.1, 0, 0)
+        elf_shift_camera_matrix(-0.1, 0, 0)
+    elif elf_input('down arrow'):
+        elf_rotate_camera_matrix(0.1, 0, 0)
+    elif elf_input('up arrow'):
+        elf_rotate_camera_matrix(-0.1, 0, 0)
+    elif elf_input('right arrow'):
+        elf_rotate_camera_matrix(0, 0.2, 0)
+    elif elf_input('left arrow'):
+        elf_rotate_camera_matrix(0, -0.2, 0)
+    elif elf_input('left shift'):
+        elf_shift_camera_matrix(0, 0.1, 0)
+    elif elf_input('space'):
+        elf_shift_camera_matrix(0, -0.1, 0)
+
 
 def elf_shader_generation():
-    app.render.setShaderAuto()
+    app.render.setShaderAuto(True)
+
 
 def main():
     context = elf_create_context()
@@ -262,13 +285,13 @@ def main():
     draw_triangles()
     elf_set_render(elf_update)
     elf_shader_generation()
+    elf_antialiasing_enable()
     elf_render_window()
 
 
 def draw_triangles():
     global ELF_TEST_PARENT_ID
     ELF_TEST_PARENT_ID = elf_draw(["triangle", (0, 0, 0), (0.5, 0.5, 0.5), (0, 0, 0)])
-    elf_shade_dir_light([0, 0, 0])
     gen_triangles()
 
 
