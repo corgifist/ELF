@@ -1,19 +1,24 @@
 from random import randint, random
 
-from panda3d.core import AntialiasAttrib, loadPrcFileData
-from rpcore import RenderPipeline
+from panda3d.core import AntialiasAttrib, loadPrcFileData, Material
+from direct.filter.CommonFilters import CommonFilters
 from ursina import *
 from ursina.shaders import *
 
+loadPrcFileData("", "parallax-mapping-samples 3")
+loadPrcFileData("", "parallax-mapping-scale 0.1")
+
 app = Ursina()
-pipeline = RenderPipeline()
+filters = None
 
 ELF_COLOR = color.white
 ELFC = color
 ELF_SIMPLE_TRIANGLE = ['triangle.obj', (0, 0, 0), (0.5, 0.5, 0.5), (0, 0, 0)]
 ELF_MAP = {}
 ELF_PARENTS = {}
+ELF_MATERIALS = {}
 ELF_LAST_ID = -1
+ELF_FOG = None
 update = None
 ELF_SKY = None
 
@@ -52,19 +57,22 @@ def elf_end_color():
     ELF_COLOR = color.white
 
 
-def elf_draw(obj, receive_shadows=True):
+def elf_draw(obj, receive_shadows=True, material_id=-1, culling=True):
     shape = obj[0]
     pos = obj[1]
     sc = obj[2]
     rot = obj[3]
     en_id = elf_gen_id()
     ELF_MAP[en_id] = Entity(model=shape, position=pos, scale=sc, rotation=rot, color=ELF_COLOR)
-    if receive_shadows:
-        entity.shader = basic_lighting_shader
+    if not receive_shadows:
+        ELF_MAP[en_id].setShaderAuto(False)
+    if material_id != -1:
+        ELF_MAP[en_id].setMaterial(ELF_MATERIALS[material_id])
+    ELF_MAP[en_id].setTwoSided(not culling)
     return en_id
 
 
-def elf_draw_parent(parent, obj, receive_shadows=True):
+def elf_draw_parent(parent, obj, receive_shadows=True, material_id=-1, culling=True):
     shape = obj[0]
     pos = obj[1]
     sc = obj[2]
@@ -73,6 +81,9 @@ def elf_draw_parent(parent, obj, receive_shadows=True):
     entity = Entity(model=shape, position=pos, scale=sc, rotation=rot, color=ELF_COLOR, parent=ELF_MAP[parent])
     if receive_shadows:
         entity.shader = basic_lighting_shader
+    if material_id != -1:
+        entity.setMaterial(ELF_MATERIALS[material_id])
+    entity.setTwoSided(not culling)
     ELF_PARENTS[parent] = ELF_PARENTS[parent] + [entity] if parent in ELF_PARENTS else [entity]
     return en_id
 
@@ -86,6 +97,8 @@ def elf_draw_empty():
 def elf_render_window():
     app.run()
 
+def elf_filters_bloom():
+    filters.setBloom()
 
 def elf_clear_back():
     en_id = elf_gen_id()
@@ -173,13 +186,25 @@ def elf_gen_point_light(object, enable_shadows=True, at=(0, 0, 1), resolution=10
     return point_light
 
 
+def elf_shade_ambient(color=(0.4, 0.4, 0.4, 0.4)):
+    en_id = elf_gen_id()
+    ambient_light = AmbientLight(color=color)
+    ELF_MAP[en_id] = ambient_light
+    return en_id
+
+
 def elf_antialiasing_enable():
-    for key in ELF_MAP:
-        try:
-            ELF_MAP[key].setAntialias(AntialiasAttrib.MAuto)
-        except Exception:
-            pass
+    app.render.setAntialias(AntialiasAttrib.M_always)
     print("ELF: Antialiasing success")
+
+
+def elf_culling_control(id, culling):
+    ELF_MAP[id].setTwoSided(not culling)
+
+
+def elf_global_culling_control(culling):
+    for key in ELF_MAP:
+        elf_culling_control(key, culling)
 
 
 def elf_space_reset():
@@ -193,13 +218,20 @@ def elf_random_color():
     return color.random_color()
 
 
+def gen_material():
+    id = elf_gen_material()
+    elf_material_set_emmision_id(id, (0, 0, 0, 1))
+    return id
+
+
 def gen_triangles():
+    material_id = gen_material()
     for i in range(150):
         elf_begin_color(elf_random_color())
         scale = (0.5, 0.5, 0.5)
         rotation = (randint(0, 360), randint(0, 360), randint(0, 360),)
         position = (random.uniform(-7, 10), random.uniform(-5, 6), random.uniform(-20, 20))
-        elf_draw_parent(ELF_TEST_PARENT_ID, ["triangle.obj", position, scale, rotation])
+        elf_draw_parent(ELF_TEST_PARENT_ID, ["triangle.obj", position, scale, rotation], material_id=material_id)
         elf_end_color()
     elf_attach_light_to_id(ELF_TEST_PARENT_ID, elf_gen_point_light([0, 0, 0]))
 
@@ -259,32 +291,64 @@ def elf_change_model(model):
     ELF_MAP[ELF_LAST_ID] = model
 
 
+# Materials
+
+def elf_gen_material():
+    material = Material()
+    en_id = elf_gen_id()
+    ELF_MATERIALS[en_id] = material
+    return en_id
+
+
+def elf_material_set_shininess_id(id, value):
+    ELF_MATERIALS[id].setShininess(value)
+    return id
+
+
+def elf_material_set_specular_id(id, rgba):
+    ELF_MATERIALS[id].setSpecular(rgba)
+    return id
+
+
+def elf_material_set_emmision_id(id, rgba):
+    ELF_MATERIALS[id].setEmission(rgba)
+    return id
+
+
+def elf_material_apply(obj, mat):
+    ELF_MAP[obj].setMaterial(ELF_MATERIALS[mat])
+
+
+# Materials
+
+
 def elf_update():
+    elf_rotate_space_by_id(ELF_TEST_PARENT_ID, 0, 0.2, 0)
     if elf_input('r'):
         elf_space_reset()
         draw_triangles()
         return
     if elf_input('w'):
         elf_shift_camera_matrix(0, 0, 0.1)
-    elif elf_input('s'):
+    if elf_input('s'):
         elf_shift_camera_matrix(0, 0, -0.1)
-    elif elf_input('d'):
+    if elf_input('d'):
         elf_shift_camera_matrix(0.1, 0, 0)
-    elif elf_input('a'):
+    if elf_input('a'):
         elf_shift_camera_matrix(-0.1, 0, 0)
-    elif elf_input('down arrow'):
+    if elf_input('down arrow'):
         elf_rotate_camera_matrix(0.1, 0, 0)
-    elif elf_input('up arrow'):
+    if elf_input('up arrow'):
         elf_rotate_camera_matrix(-0.1, 0, 0)
-    elif elf_input('right arrow'):
-        elf_rotate_camera_matrix(0, 0.2, 0)
-    elif elf_input('left arrow'):
-        elf_rotate_camera_matrix(0, -0.2, 0)
-    elif elf_input('left shift'):
+    if elf_input('right arrow'):
+        elf_rotate_camera_matrix(0, 0.3, 0)
+    if elf_input('left arrow'):
+        elf_rotate_camera_matrix(0, -0.3, 0)
+    if elf_input('left shift'):
         elf_shift_camera_matrix(0, 0.1, 0)
-    elif elf_input('space'):
+    if elf_input('space'):
         elf_shift_camera_matrix(0, -0.1, 0)
-    elif elf_input('q'):
+    if elf_input('q'):
         for key in ELF_MAP:
             elf_change_model_by_id(key, "cube")
         for key in ELF_PARENTS:
@@ -298,9 +362,14 @@ def elf_shader_generation():
 
 
 def main():
+    global filters
+    filters = CommonFilters(app.win, app.cam)
+    filters.reconfigure(True, True)
+    filters.set_ambient_occlusion = True
     context = elf_create_context()
     elf_clear_back()
     elf_prepare_context(context)
+    elf_shade_ambient(color=(0.2, 0.2, 0.2, 0.2))
     draw_triangles()
     elf_set_render(elf_update)
     elf_shader_generation()
@@ -311,7 +380,7 @@ def main():
 def draw_triangles():
     global ELF_TEST_PARENT_ID
     elf_begin_color(ELFC.white)
-    ELF_TEST_PARENT_ID = elf_draw(["triangle", (0, 0, 0), (0.5, 0.5, 0.5), (0, 0, 0)])
+    ELF_TEST_PARENT_ID = elf_draw(["triangle", (0, 0, 0), (0.5, 0.5, 0.5), (0, 0, 0)], receive_shadows=False)
     elf_end_color()
     gen_triangles()
 
