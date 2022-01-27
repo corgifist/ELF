@@ -10,7 +10,7 @@ filters = None
 
 ELF_COLOR = color.white
 ELFC = color
-ELF_SIMPLE_TRIANGLE = ['triangle.obj', (0, 0, 0), (0.5, 0.5, 0.5), (0, 0, 0)]
+ELF_SIMPLE_TRIANGLE = ['clouds.obj', (0, 0, 0), (0.5, 0.5, 0.5), (0, 0, 0)]
 ELF_MAP = {}
 ELF_PARENTS = {}
 ELF_MATERIALS = {}
