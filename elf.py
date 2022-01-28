@@ -1,9 +1,10 @@
 import random
 
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import loadPrcFileData, ConfigVariableManager, Shader, Material
+from panda3d.core import loadPrcFileData, ConfigVariableManager, Shader, Material, PointLight, DirectionalLight
 from direct.filter.CommonFilters import CommonFilters
-from rpcore import *
+from rpcore import RenderPipeline
+from rpcore import PointLight as RP_PointLight
 from rpcore.util.movement_controller import MovementController
 
 
@@ -16,7 +17,6 @@ class ELF_RUNTIME(ShowBase):
             ELF_PIPELINE = RenderPipeline()
             ELF_PIPELINE.set_loading_screen_image("assets/splash.jpg")
             ELF_PIPELINE.create(self)
-            ELF_PIPELINE.add_environment_probe()
 
     def update(self, task):
         pass
@@ -29,6 +29,7 @@ ELF_TEXTURES = {}
 ELF_PIPELINE: RenderPipeline = None
 ELF_FILTERS: CommonFilters = None
 ELF_PIPELINE_FLAG = True
+ELF_SKYBOX_ID = -1
 
 
 def elf_enable_mouse():
@@ -49,6 +50,8 @@ def elf_init_show_base():
     elf_use_assimp()
     ELF_SHOW_BASE = ELF_RUNTIME()
     ELF_SHOW_BASE.disableMouse()
+    if not ELF_PIPELINE_FLAG:
+        ELF_SHOW_BASE.render.setShaderAuto(True)
 
 
 def elf_win_size(w, h):
@@ -65,11 +68,20 @@ def elf_win_title(title):
     loadPrcFileData('', 'window-title ' + title)
 
 
+def elf_sync(mode):
+    if ELF_SHOW_BASE != None:
+        print("ELF: failed to change sync-video because this function is special, and needs to be called before "
+              "'elf_init_show_base'")
+    loadPrcFileData('', f'vsync {mode}')
+
+
 def elf_show_fps(fps):
     if ELF_SHOW_BASE != None:
         print("ELF: failed to change show-frame-rate-meter because this function is special, and needs to be called "
               "before "
               "'elf_init_show_base'")
+    if ELF_PIPELINE_FLAG:
+        print("Can't enable legacy FPS counter in modern mode.")
     loadPrcFileData('', 'show-frame-rate-meter ' + str(fps))
 
 
@@ -101,6 +113,10 @@ def elf_render_resolution(w, h):
 
 def elf_camera_fov(fov):
     ELF_SHOW_BASE.camLens.setFov(fov)
+
+
+def elf_daytime_manager(time):
+    ELF_PIPELINE.daytime_mgr.time = time
 
 
 def elf_use_assimp():
@@ -149,6 +165,47 @@ def elf_debug_config():
     ConfigVariableManager.getGlobalPtr().listVariables()
 
 
+def elf_shade_point_light(position=(0, 0, 0), color=(1, 1, 1), shadows=True, shadows_resolution=1024, energy=500,
+                          legacy_energy=(0, 0, 1), radius=1000):
+    id = elf_gen_id()
+    if ELF_PIPELINE_FLAG:
+        light = RP_PointLight()
+        light.pos = position
+        light.color = color
+        light.casts_shadows = shadows
+        light.shadow_map_resolution = shadows_resolution
+        light.energy = energy
+        light.radius = radius
+        ELF_PIPELINE.add_light(light)
+        ELF_OBJECTS[id] = light
+    else:
+        light = PointLight('light')
+        light.attenuation = legacy_energy
+        light.color = (color[0], color[1], color[2], 1)
+        light.setShadowCaster(shadows, shadows_resolution, shadows_resolution)
+        node = ELF_SHOW_BASE.render.attachNewNode(light)
+        node.setPos(position)
+        ELF_SHOW_BASE.render.setLight(node)
+        ELF_OBJECTS[id] = light
+    return id
+
+
+def elf_shade_directional_light(color=(1, 1, 1), hpr=(0, 0, 0), shadows=True, shadows_resolution=1024):
+    id = elf_gen_id()
+    light = DirectionalLight('light')
+    light.setColor((color[0], color[1], color[2], 1))
+    light.setShadowCaster(shadows, shadows_resolution, shadows_resolution)
+    node = ELF_SHOW_BASE.render.attachNewNode(light)
+    node.setHpr(hpr)
+    ELF_SHOW_BASE.render.setLight(node)
+    ELF_OBJECTS[id] = light
+    return id
+
+
+def elf_apply_sky(texture):
+    pass
+
+
 def elf_gen_id():
     return random.randint(0, 1000000000000000000)
 
@@ -157,15 +214,50 @@ def elf_loader():
     return ELF_SHOW_BASE.loader
 
 
-def elf_draw(path, position=(0, 0, 0), scale=(1.0, 1.0, 1.0), rotation=(0, 0, 0), set_two_sided=False):
+def elf_draw(path, position=(0, 0, 0), scale=(1.0, 1.0, 1.0), rotation=(0, 0, 0), set_two_sided=False, color=None,
+             use_lit_pipeline=False, wireframe=False):
     id = elf_gen_id()
     ELF_OBJECTS[id] = elf_loader().loadModel(path)
     ELF_OBJECTS[id].setPos(position[0], position[1], position[2])
     ELF_OBJECTS[id].setScale(scale[0], scale[1], scale[2])
     ELF_OBJECTS[id].setHpr(rotation[0], rotation[1], rotation[2])
     ELF_OBJECTS[id].setTwoSided(set_two_sided)
+    if use_lit_pipeline:
+        if ELF_PIPELINE_FLAG:
+            elf_attach_pipeline_effect(id, "shaders/lit_pipeline.yaml")
+        else:
+            lit_pipeline_shader = elf_parse_glsl("shaders/lit_pipeline_vert.shader", "shaders/lit_pipeline_frag.shader")
+            elf_attach_shader_to_model(id, lit_pipeline_shader)
+    if color != None:
+        if ELF_PIPELINE_FLAG:
+            elf_attach_pipeline_effect(id, "shaders/raw_color.yaml")
+            elf_set_in_glsl(id, "color", color)
+        else:
+            ELF_OBJECTS[id].setColor((color[0], color[1], color[2], 1))
+    if wireframe:
+        ELF_OBJECTS[id].setRenderModeWireframe()
     ELF_OBJECTS[id].reparentTo(ELF_SHOW_BASE.render)
     return id
+
+
+def elf_change_skybox(path):
+    global ELF_SKYBOX_ID
+    if ELF_SKYBOX_ID != -1:
+        ELF_OBJECTS[ELF_SKYBOX_ID].removeNode()
+    ELF_SKYBOX_ID = elf_draw("models/sky.obj", scale=(3000, 3000, 3000), rotation=(0, 90, 0), set_two_sided=True,
+                             use_lit_pipeline=True)
+    sky_texture = elf_bind_texture(path)
+    elf_attach_texture_to_id(ELF_SKYBOX_ID, sky_texture)
+    return ELF_SKYBOX_ID
+
+
+def elf_rotate_object(id, x, y, z):
+    hpr = ELF_OBJECTS[id].getHpr()
+    ELF_OBJECTS[id].setHpr(hpr[0] + x, hpr[1] + y, hpr[2] + z)
+
+
+def elf_legacy_change_color(id, color):
+    ELF_OBJECTS[id].setColor(color)
 
 
 def elf_set_two_sided(obj, sides):
