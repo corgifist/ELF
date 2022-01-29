@@ -33,7 +33,6 @@ ELF_PIPELINE: RenderPipeline = None
 ELF_FILTERS: CommonFilters = None
 ELF_PIPELINE_FLAG = True
 ELF_SKYBOX_ID = -1
-ELF_PARENTS = {}
 ELF_ATTACHES: [NodePath, NodePath] = {}
 ELF_UPDATE = None
 
@@ -51,7 +50,7 @@ def elf_switch_to_legacy_pipeline(flag):
 
 
 def elf_init_show_base():
-    global ELF_SHOW_BASE
+    global ELF_SHOW_BASE, ELF_UPDATE
     elf_win_title('ELF')
     elf_use_assimp()
     ELF_SHOW_BASE = ELF_RUNTIME()
@@ -201,7 +200,7 @@ def elf_shade_point_light(position=(0, 0, 0), color=(1, 1, 1), shadows=True, sha
         node = ELF_SHOW_BASE.render.attachNewNode(light)
         node.setPos(position)
         ELF_SHOW_BASE.render.setLight(node)
-        ELF_OBJECTS[id] = light
+        ELF_OBJECTS[id] = node
     return id
 
 
@@ -226,7 +225,7 @@ def elf_loader():
 
 
 def elf_draw(path, position=(0, 0, 0), scale=(1.0, 1.0, 1.0), rotation=(0, 0, 0), set_two_sided=False, color=None,
-             use_lit_pipeline=False, wireframe=False, parent=-1, panda3d_fix=False):
+             use_lit_pipeline=False, wireframe=False, parent=-1, panda3d_fix=False, shader_id=-1):
     id = elf_gen_id()
     ELF_OBJECTS[id] = elf_loader().loadModel(path)
     ELF_OBJECTS[id].setPos(position[0], position[1], position[2])
@@ -250,10 +249,12 @@ def elf_draw(path, position=(0, 0, 0), scale=(1.0, 1.0, 1.0), rotation=(0, 0, 0)
     if panda3d_fix:
         if ELF_PIPELINE_FLAG:
             elf.elf_attach_pipeline_effect(id, "shaders/panda3d-shader.yaml")
+    if shader_id != -1:
+        elf.elf_attach_shader_to_model(id, shader_id)
     if parent != -1:
         object = ELF_OBJECTS[id]
-        del ELF_OBJECTS[id]
-        ELF_PARENTS[parent] = ELF_PARENTS[parent] + [object] if not parent in ELF_PARENTS[parent] else [object]
+        ELF_ATTACHES[parent] = ELF_ATTACHES[parent] + [object] if (parent in ELF_ATTACHES) else [object]
+        object.reparentTo(ELF_SHOW_BASE.render)
     else:
         ELF_OBJECTS[id].reparentTo(ELF_SHOW_BASE.render)
     return id
@@ -295,7 +296,7 @@ def elf_bind_texture(path):
 
 
 def elf_attach_textures_to_id(obj, textures):
-    textures_array = [ELF_TEXTURES[id] for id in ELF_TEXTURES]
+    textures_array = [ELF_TEXTURES[id] for id in textures]
     ELF_OBJECTS[obj].setTextures(ELF_OBJECTS[obj], *textures_array)
 
 
@@ -332,10 +333,14 @@ def elf_gen_update_function(task):
 
 
 def elf_update_attaches():
-    for parent, child in ELF_ATTACHES:
-        child.setPosition(parent.getPosition())
-        child.setHpr(parent.getHpr())
-        child.setScale(parent.getScale())
+    print(ELF_ATTACHES)
+    for parent_id in ELF_ATTACHES:
+        parent = ELF_OBJECTS[parent_id]
+        children = ELF_ATTACHES[parent_id]
+        for child in children:
+            child.setPos(parent.getPos())
+            child.setHpr(parent.getHpr())
+            child.setScale(parent.getScale())
 
 
 def elf_win_w():
@@ -351,4 +356,6 @@ def elf_add_task(task, task_name):
 
 
 def elf_render_window():
+    if ELF_UPDATE == None:
+        elf_set_update(lambda: 0)
     ELF_SHOW_BASE.run()
