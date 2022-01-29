@@ -1,11 +1,14 @@
 import random
 
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import loadPrcFileData, ConfigVariableManager, Shader, Material, PointLight, DirectionalLight
+from panda3d.core import loadPrcFileData, ConfigVariableManager, Shader, Material, PointLight, DirectionalLight, \
+    AmbientLight, NodePath
 from direct.filter.CommonFilters import CommonFilters
 from rpcore import RenderPipeline
 from rpcore import PointLight as RP_PointLight
 from rpcore.util.movement_controller import MovementController
+
+import elf
 
 
 class ELF_RUNTIME(ShowBase):
@@ -30,6 +33,9 @@ ELF_PIPELINE: RenderPipeline = None
 ELF_FILTERS: CommonFilters = None
 ELF_PIPELINE_FLAG = True
 ELF_SKYBOX_ID = -1
+ELF_PARENTS = {}
+ELF_ATTACHES: [NodePath, NodePath] = {}
+ELF_UPDATE = None
 
 
 def elf_enable_mouse():
@@ -116,6 +122,9 @@ def elf_camera_fov(fov):
 
 
 def elf_daytime_manager(time):
+    if not ELF_PIPELINE_FLAG:
+        print("Can't change pipeline daytime, because legacy pipeline is enabled!")
+        return
     ELF_PIPELINE.daytime_mgr.time = time
 
 
@@ -165,6 +174,12 @@ def elf_debug_config():
     ConfigVariableManager.getGlobalPtr().listVariables()
 
 
+def elf_shade_ambient_light():
+    light = AmbientLight('ambient')
+    node = ELF_SHOW_BASE.render.attachNewNode(light)
+    ELF_SHOW_BASE.render.setLight(node)
+
+
 def elf_shade_point_light(position=(0, 0, 0), color=(1, 1, 1), shadows=True, shadows_resolution=1024, energy=500,
                           legacy_energy=(0, 0, 1), radius=1000):
     id = elf_gen_id()
@@ -202,10 +217,6 @@ def elf_shade_directional_light(color=(1, 1, 1), hpr=(0, 0, 0), shadows=True, sh
     return id
 
 
-def elf_apply_sky(texture):
-    pass
-
-
 def elf_gen_id():
     return random.randint(0, 1000000000000000000)
 
@@ -215,7 +226,7 @@ def elf_loader():
 
 
 def elf_draw(path, position=(0, 0, 0), scale=(1.0, 1.0, 1.0), rotation=(0, 0, 0), set_two_sided=False, color=None,
-             use_lit_pipeline=False, wireframe=False):
+             use_lit_pipeline=False, wireframe=False, parent=-1, panda3d_fix=False):
     id = elf_gen_id()
     ELF_OBJECTS[id] = elf_loader().loadModel(path)
     ELF_OBJECTS[id].setPos(position[0], position[1], position[2])
@@ -236,15 +247,27 @@ def elf_draw(path, position=(0, 0, 0), scale=(1.0, 1.0, 1.0), rotation=(0, 0, 0)
             ELF_OBJECTS[id].setColor((color[0], color[1], color[2], 1))
     if wireframe:
         ELF_OBJECTS[id].setRenderModeWireframe()
-    ELF_OBJECTS[id].reparentTo(ELF_SHOW_BASE.render)
+    if panda3d_fix:
+        if ELF_PIPELINE_FLAG:
+            elf.elf_attach_pipeline_effect(id, "shaders/panda3d-shader.yaml")
+    if parent != -1:
+        object = ELF_OBJECTS[id]
+        del ELF_OBJECTS[id]
+        ELF_PARENTS[parent] = ELF_PARENTS[parent] + [object] if not parent in ELF_PARENTS[parent] else [object]
+    else:
+        ELF_OBJECTS[id].reparentTo(ELF_SHOW_BASE.render)
     return id
+
+
+def elf_runtime_attach_model(parent, obj):
+    pass
 
 
 def elf_change_skybox(path):
     global ELF_SKYBOX_ID
     if ELF_SKYBOX_ID != -1:
         ELF_OBJECTS[ELF_SKYBOX_ID].removeNode()
-    ELF_SKYBOX_ID = elf_draw("models/sky.obj", scale=(3000, 3000, 3000), rotation=(0, 90, 0), set_two_sided=True,
+    ELF_SKYBOX_ID = elf_draw("models/sky.obj", scale=(1000, 1000, 1000), rotation=(0, 90, 0), set_two_sided=True,
                              use_lit_pipeline=True)
     sky_texture = elf_bind_texture(path)
     elf_attach_texture_to_id(ELF_SKYBOX_ID, sky_texture)
@@ -297,7 +320,22 @@ def elf_wireframe(wireframe):
 
 
 def elf_set_update(function):
-    ELF_SHOW_BASE.taskMgr.add(function, "update")
+    global ELF_UPDATE
+    ELF_UPDATE = function
+    ELF_SHOW_BASE.taskMgr.add(elf_gen_update_function, "update")
+
+
+def elf_gen_update_function(task):
+    ELF_UPDATE()
+    elf_update_attaches()
+    return task.cont
+
+
+def elf_update_attaches():
+    for parent, child in ELF_ATTACHES:
+        child.setPosition(parent.getPosition())
+        child.setHpr(parent.getHpr())
+        child.setScale(parent.getScale())
 
 
 def elf_win_w():
