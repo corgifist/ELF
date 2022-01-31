@@ -37,6 +37,7 @@ ELF_PIPELINE_FLAG = True
 ELF_SKYBOX_ID = -1
 ELF_ATTACHES: [NodePath, NodePath] = {}
 ELF_UPDATE = None
+ELF_LAST_SKY = None
 
 
 def elf_enable_mouse():
@@ -228,7 +229,7 @@ def elf_loader():
 
 
 def elf_draw(path, position=(0, 0, 0), scale=(1.0, 1.0, 1.0), rotation=(0, 0, 0), set_two_sided=False, color=None,
-             use_lit_pipeline=False, wireframe=False, attach=-1, panda3d_fix=False, shader_id=-1):
+             use_lit_pipeline=False, wireframe=False, attach=-1, panda3d_fix=False, shader_id=-1, parent=-1):
     id = elf_gen_id()
     ELF_OBJECTS[id] = elf_loader().loadModel(path)
     ELF_OBJECTS[id].setPos(position[0], position[1], position[2])
@@ -246,7 +247,7 @@ def elf_draw(path, position=(0, 0, 0), scale=(1.0, 1.0, 1.0), rotation=(0, 0, 0)
             elf_attach_pipeline_effect(id, "shaders/raw_color.yaml")
             elf_set_in_glsl(id, "color", color)
         else:
-            ELF_OBJECTS[id].setColor((color[0], color[1], color[2], 1))
+            ELF_OBJECTS[id].setColor(color[0], color[1], color[2], 1)
     if wireframe:
         ELF_OBJECTS[id].setRenderModeWireframe()
     if panda3d_fix:
@@ -259,9 +260,27 @@ def elf_draw(path, position=(0, 0, 0), scale=(1.0, 1.0, 1.0), rotation=(0, 0, 0)
         del ELF_OBJECTS[id]
         ELF_ATTACHES[attach] = ELF_ATTACHES[attach] + [object] if (attach in ELF_ATTACHES) else [object]
         object.reparentTo(ELF_SHOW_BASE.render)
+    elif parent != -1:
+        ELF_OBJECTS[id].reparentTo(ELF_OBJECTS[parent])
     else:
         ELF_OBJECTS[id].reparentTo(ELF_SHOW_BASE.render)
     return id
+
+
+def elf_accept(key, function):
+    ELF_SHOW_BASE.accept(key, function)
+
+def elf_clear_space():
+    for key in ELF_OBJECTS:
+        if type(ELF_OBJECTS[key]) is RP_PointLight:
+            ELF_OBJECTS[key].energy = 0
+        else:
+            ELF_OBJECTS[key].removeNode()
+
+    ELF_OBJECTS.clear()
+
+    if ELF_LAST_SKY != None:
+        elf.elf_change_skybox(ELF_LAST_SKY)
 
 
 def elf_runtime_attach_model(parent, child):
@@ -271,10 +290,14 @@ def elf_runtime_attach_model(parent, child):
 
 def elf_change_skybox(path):
     global ELF_SKYBOX_ID
+    global ELF_LAST_SKY
+    ELF_LAST_SKY = path
     if ELF_SKYBOX_ID != -1:
-        ELF_OBJECTS[ELF_SKYBOX_ID].removeNode()
-    ELF_SKYBOX_ID = elf_draw("models/sky.obj", scale=(1000, 1000, 1000), rotation=(0, 90, 0), set_two_sided=True,
-                             use_lit_pipeline=True)
+        try:
+            ELF_OBJECTS[ELF_SKYBOX_ID].removeNode()
+        except:
+            pass
+    ELF_SKYBOX_ID = elf_draw("models/sky.obj", scale=(1000, 1000, 1000), rotation=(0, 90, 0), set_two_sided=True)
     sky_texture = elf_bind_texture(path)
     elf_attach_texture_to_id(ELF_SKYBOX_ID, sky_texture)
     return ELF_SKYBOX_ID
@@ -384,6 +407,8 @@ def elf_render_window():
     if ELF_SHOW_BASE.pipe.getInterfaceName() != 'OpenGL':
         print("This program requires OpenGL.")
         exit(1)
+    if ELF_PIPELINE_FLAG:
+        ELF_PIPELINE.add_environment_probe()
     ELF_SHOW_BASE.run()
 
 
