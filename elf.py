@@ -1,6 +1,7 @@
 import random
 
-import imgui.integrations.opengl
+import os
+import sys
 
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import loadPrcFileData, ConfigVariableManager, Shader, Material, PointLight, DirectionalLight, \
@@ -364,7 +365,6 @@ def elf_gen_update_function(task):
 
 
 def elf_update_attaches():
-    print(ELF_ATTACHES)
     for parent_id in ELF_ATTACHES:
         parent = ELF_OBJECTS[parent_id]
         children = ELF_ATTACHES[parent_id]
@@ -474,3 +474,12 @@ def elf_render_window():
 def elf_translate_object(id, x, y, z):
     pos = ELF_OBJECTS[id].getPos()
     ELF_OBJECTS[id].setPos(pos[0] + x, pos[1] + y, pos[2] + z)
+
+
+def elf_reload_pipeline():
+    global ELF_PIPELINE
+    elf_restart()
+
+
+def elf_restart():
+    os.execv(sys.executable, ['python'] + sys.argv)

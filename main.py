@@ -8,24 +8,22 @@ elf.elf_prefab_noclip()
 elf.elf_camera_fov(90)
 elf.elf_daytime_manager(12.00)
 
+parent_triangle = -1
 
 def update():
     elf.elf_rotate_object(parent_triangle, 0.1, 0, 0)
 
 
-parent_triangle = elf.elf_draw("models/triangle.obj", color=(0, 1, 1), rotation=(0, 0, 0))
-
-
 def load():
     global parent_triangle
+    parent_triangle = elf.elf_draw("models/triangle.obj", color=(0, 1, 1), rotation=(0, 0, 0))
     for i in range(150):
         scale = (0.5, 0.5, 0.5)
         print(elf.ELF_OBJECTS)
         rotation = (random.randint(0, 360), 0, random.randint(0, 360),)
         position = (random.uniform(-7, 10), random.uniform(-5, 6), random.uniform(-20, 20))
-        id = elf.elf_draw("models/triangle.obj", position=position, rotation=rotation, scale=scale,
+        elf.elf_draw("models/triangle.obj", position=position, rotation=rotation, scale=scale,
                      color=(random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1)), parent=parent_triangle)
-        elf.elf_attach_pipeline_effect(id, "shaders/raw_metal.yaml")
 
     elf.elf_rotate_object(parent_triangle, 0, 90, 0)
     elf.elf_shade_point_light(color=(10, 10, 10), energy=100)
@@ -33,6 +31,7 @@ def load():
 
 
 def reload():
+    elf.elf_reload_pipeline()
     elf.elf_clear_space()
     load()
 
