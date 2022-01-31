@@ -4,7 +4,7 @@ import imgui.integrations.opengl
 
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import loadPrcFileData, ConfigVariableManager, Shader, Material, PointLight, DirectionalLight, \
-    AmbientLight, NodePath
+    AmbientLight, NodePath, AntialiasAttrib
 from direct.filter.CommonFilters import CommonFilters
 from rpcore import RenderPipeline
 from rpcore import PointLight as RP_PointLight
@@ -38,6 +38,7 @@ ELF_SKYBOX_ID = -1
 ELF_ATTACHES: [NodePath, NodePath] = {}
 ELF_UPDATE = None
 ELF_LAST_SKY = None
+ELF_FILTERS: CommonFilters = None
 
 
 def elf_enable_mouse():
@@ -53,13 +54,15 @@ def elf_switch_to_legacy_pipeline(flag):
 
 
 def elf_init_show_base():
-    global ELF_SHOW_BASE, ELF_UPDATE
+    global ELF_SHOW_BASE, ELF_UPDATE, ELF_FILTERS
     elf_win_title('ELF')
     elf_use_assimp()
     ELF_SHOW_BASE = ELF_RUNTIME()
     ELF_SHOW_BASE.disableMouse()
     if not ELF_PIPELINE_FLAG:
         ELF_SHOW_BASE.render.setShaderAuto(True)
+    if not ELF_PIPELINE_FLAG:
+        ELF_FILTERS = CommonFilters(ELF_SHOW_BASE.win, ELF_SHOW_BASE.cam)
 
 
 def elf_win_size(w, h):
@@ -257,7 +260,6 @@ def elf_draw(path, position=(0, 0, 0), scale=(1.0, 1.0, 1.0), rotation=(0, 0, 0)
         elf.elf_attach_shader_to_model(id, shader_id)
     if attach != -1:
         object = ELF_OBJECTS[id]
-        del ELF_OBJECTS[id]
         ELF_ATTACHES[attach] = ELF_ATTACHES[attach] + [object] if (attach in ELF_ATTACHES) else [object]
         object.reparentTo(ELF_SHOW_BASE.render)
     elif parent != -1:
@@ -269,6 +271,7 @@ def elf_draw(path, position=(0, 0, 0), scale=(1.0, 1.0, 1.0), rotation=(0, 0, 0)
 
 def elf_accept(key, function):
     ELF_SHOW_BASE.accept(key, function)
+
 
 def elf_clear_space():
     for key in ELF_OBJECTS:
@@ -375,6 +378,33 @@ def elf_update_attaches():
                 child.setScale(parent.getScale())
             except:
                 pass
+
+
+def elf_legacy_bloom(**kwargs):
+    ELF_FILTERS.setBloom(**kwargs)
+
+
+def elf_legacy_stencil_outline(**kwargs):
+    ELF_FILTERS.setCartoonInk(**kwargs)
+
+
+def elf_legacy_antialiasing():
+    ELF_SHOW_BASE.render.setAntialias(AntialiasAttrib.MAuto)
+
+
+def elf_legacy_volumetric_light(caster, **kwargs):
+    ELF_FILTERS.setVolumetricLighting(ELF_OBJECTS[caster], **kwargs)
+
+
+def elf_legacy_inverted():
+    ELF_FILTERS.setInverted()
+
+
+def elf_legacy_ambient_occlusion(**kwargs):
+    ELF_FILTERS.setAmbientOcclusion(**kwargs)
+
+def elf_legacy_blur(amount):
+    ELF_FILTERS.setBlurSharpen(amount)
 
 
 def elf_get_pos(id):
