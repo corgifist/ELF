@@ -384,27 +384,56 @@ def elf_legacy_bloom(**kwargs):
     ELF_FILTERS.setBloom(**kwargs)
 
 
+def elf_legacy_bloom_delete():
+    ELF_FILTERS.delBloom()
+
+
 def elf_legacy_stencil_outline(**kwargs):
     ELF_FILTERS.setCartoonInk(**kwargs)
+
+
+def elf_legacy_stencil_outline_delete():
+    ELF_FILTERS.delCartoonInk()
 
 
 def elf_legacy_antialiasing():
     ELF_SHOW_BASE.render.setAntialias(AntialiasAttrib.MAuto)
 
 
+def elf_legacy_antialiasing_delete():
+    ELF_SHOW_BASE.render.setAntialias(AntialiasAttrib.MOff)
+
+
 def elf_legacy_volumetric_light(caster, **kwargs):
     ELF_FILTERS.setVolumetricLighting(ELF_OBJECTS[caster], **kwargs)
+
+
+def elf_legacy_volumetric_light_delete():
+    ELF_FILTERS.delVolumetricLighting()
 
 
 def elf_legacy_inverted():
     ELF_FILTERS.setInverted()
 
 
+def elf_legacy_inverted_delete():
+    ELF_FILTERS.delInverted()
+
+
 def elf_legacy_ambient_occlusion(**kwargs):
     ELF_FILTERS.setAmbientOcclusion(**kwargs)
 
-def elf_legacy_blur(amount):
+
+def elf_legacy_ambient_occlusion_delete():
+    ELF_FILTERS.delAmbientOcclusion()
+
+
+def elf_legacy_blur_sharpen(amount):
     ELF_FILTERS.setBlurSharpen(amount)
+
+
+def elf_legacy_blur_sharpen_delete():
+    ELF_FILTERS.delBlurSharpen()
 
 
 def elf_get_pos(id):
