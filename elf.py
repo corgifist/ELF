@@ -1,5 +1,7 @@
 import random
 
+import imgui.integrations.opengl
+
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import loadPrcFileData, ConfigVariableManager, Shader, Material, PointLight, DirectionalLight, \
     AmbientLight, NodePath
@@ -173,8 +175,9 @@ def elf_debug_config():
     ConfigVariableManager.getGlobalPtr().listVariables()
 
 
-def elf_shade_ambient_light():
+def elf_shade_ambient_light(color=(1, 1, 1)):
     light = AmbientLight('ambient')
+    light.setColor((color[0], color[1], color[2], 1.0))
     node = ELF_SHOW_BASE.render.attachNewNode(light)
     ELF_SHOW_BASE.render.setLight(node)
 
@@ -225,7 +228,7 @@ def elf_loader():
 
 
 def elf_draw(path, position=(0, 0, 0), scale=(1.0, 1.0, 1.0), rotation=(0, 0, 0), set_two_sided=False, color=None,
-             use_lit_pipeline=False, wireframe=False, parent=-1, panda3d_fix=False, shader_id=-1):
+             use_lit_pipeline=False, wireframe=False, attach=-1, panda3d_fix=False, shader_id=-1):
     id = elf_gen_id()
     ELF_OBJECTS[id] = elf_loader().loadModel(path)
     ELF_OBJECTS[id].setPos(position[0], position[1], position[2])
@@ -251,17 +254,19 @@ def elf_draw(path, position=(0, 0, 0), scale=(1.0, 1.0, 1.0), rotation=(0, 0, 0)
             elf.elf_attach_pipeline_effect(id, "shaders/panda3d-shader.yaml")
     if shader_id != -1:
         elf.elf_attach_shader_to_model(id, shader_id)
-    if parent != -1:
+    if attach != -1:
         object = ELF_OBJECTS[id]
-        ELF_ATTACHES[parent] = ELF_ATTACHES[parent] + [object] if (parent in ELF_ATTACHES) else [object]
+        del ELF_OBJECTS[id]
+        ELF_ATTACHES[attach] = ELF_ATTACHES[attach] + [object] if (attach in ELF_ATTACHES) else [object]
         object.reparentTo(ELF_SHOW_BASE.render)
     else:
         ELF_OBJECTS[id].reparentTo(ELF_SHOW_BASE.render)
     return id
 
 
-def elf_runtime_attach_model(parent, obj):
-    pass
+def elf_runtime_attach_model(parent, child):
+    object = ELF_OBJECTS[child]
+    ELF_ATTACHES[parent] = ELF_ATTACHES[parent] + [object] if (parent in ELF_ATTACHES) else [object]
 
 
 def elf_change_skybox(path):
@@ -339,8 +344,26 @@ def elf_update_attaches():
         children = ELF_ATTACHES[parent_id]
         for child in children:
             child.setPos(parent.getPos())
-            child.setHpr(parent.getHpr())
-            child.setScale(parent.getScale())
+            try:
+                child.setHpr(parent.getHpr())
+            except:
+                pass
+            try:
+                child.setScale(parent.getScale())
+            except:
+                pass
+
+
+def elf_get_pos(id):
+    return ELF_OBJECTS[id].getPos()
+
+
+def elf_get_scale(id):
+    return ELF_OBJECTS[id].getScale()
+
+
+def elf_get_hpr(id):
+    return ELF_OBJECTS[id].getHpr()
 
 
 def elf_win_w():
@@ -358,4 +381,12 @@ def elf_add_task(task, task_name):
 def elf_render_window():
     if ELF_UPDATE == None:
         elf_set_update(lambda: 0)
+    if ELF_SHOW_BASE.pipe.getInterfaceName() != 'OpenGL':
+        print("This program requires OpenGL.")
+        exit(1)
     ELF_SHOW_BASE.run()
+
+
+def elf_translate_object(id, x, y, z):
+    pos = ELF_OBJECTS[id].getPos()
+    ELF_OBJECTS[id].setPos(pos[0] + x, pos[1] + y, pos[2] + z)
